@@ -141,13 +141,14 @@ static void _curl_perform(uv_poll_t *req, int status, int events) {
     if (status < 0)                      flags = CURL_CSELECT_ERR;
     if (!status && events & UV_READABLE) flags |= CURL_CSELECT_IN;
     if (!status && events & UV_WRITABLE) flags |= CURL_CSELECT_OUT;
-
+    uvcurl_log("curlm[%p] sockfd[%d] ", multi->curlm_, context->sockfd);
     curl_multi_socket_action(multi->curlm_, context->sockfd, flags, &running_handles);
     _check_multi_info(multi);   
 }
 
 static int _handle_socket(CURL *easy, curl_socket_t s, int action, void *userp, void *socketp) {
-    uvcurl_log("");
+    uvcurl_log("easy[%p] socket[%d] action[%d] userp[%p] socketp[%p]",
+        easy, s, action, userp, socketp);
     assert(NULL != easy);
     assert(NULL != userp);
     //assert(NULL != socketp);

@@ -1,11 +1,11 @@
 
+file(GLOB SRCS "*.c" "*.cpp")
 
+foreach(var ${SRCS})
+    string(REGEX REPLACE ".*/" "" var ${var})
 
-link_directories(${PROJECT_BINARY_DIR}/uvcurl)
-add_executable(uvget "main.c")
-target_link_libraries(uvget uvcurl libuv curl)
-add_dependencies(uvget uvcurl)
+    set(target ${var}.t)
+    add_executable(${target} ${var})
+    target_link_libraries(${target} uvcurl libuv curl ssl crypto)
+endforeach(var)
 
-add_executable(uvgetpp "main.cpp")
-target_link_libraries(uvgetpp uvcurl libuv curl)
-add_dependencies(uvgetpp uvcurl)

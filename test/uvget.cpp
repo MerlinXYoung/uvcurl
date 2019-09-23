@@ -17,7 +17,7 @@ std::unique_ptr<T> make_unique(Args&&... args)
 #endif
 using namespace std;
 
-void add_download(shared_ptr<cppuvcurl::Multi> multi, const char *url, int num) {
+void add_download(shared_ptr<uvcurl::Multi> multi, const char *url, int num) {
     char filename[50];
     sprintf(filename, "%d.download", num);
     FILE *file;
@@ -48,7 +48,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    auto multi = make_shared<cppuvcurl::Multi>(loop);
+    auto multi = make_shared<uvcurl::Multi>(loop);
     
     
     while (argc-- > 1) {

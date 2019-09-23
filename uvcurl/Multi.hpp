@@ -6,7 +6,7 @@
 #else
 #include <memory>
 #include <functional>
-namespace cppuvcurl
+namespace uvcurl
 {
 class Multi
 {
