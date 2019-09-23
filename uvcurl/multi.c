@@ -3,10 +3,14 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <pthread.h>
-
+#include "macro.h"
+#define __UVCURL_LOG__
+#ifdef __UVCURL_LOG__
 #define uvcurl_log(fmt, ...) \
 printf("[0x%lX]%s:%u:" fmt "\n",pthread_self(), __FUNCTION__, __LINE__, ##__VA_ARGS__)
-
+#else
+#define uvcurl_log(fmt, ...) 
+#endif
 #define uvcurl_check_ret(res) \
 do{ \
     if(0 != res){ \
@@ -23,12 +27,11 @@ do{ \
     } \
 }while(0)
 
-#define uvcurl_malloc(T) \
-(T*) malloc(sizeof(T));
-
-#define uvcurl_malloc_obj(T, obj) \
-T* obj = uvcurl_malloc(T);
-
+typedef struct uvcurl_curl_private_s
+{
+    uvcurl_curl_done_cb_t cb;
+    void * data;
+}uvcurl_curl_private_t;
 typedef struct uvcurl_multi_s
 {
     uv_timer_t timer_;
@@ -65,7 +68,7 @@ static void _curl_close_cb(uv_handle_t *handle) {
 }
 
 static void _destroy_curl_context(curl_context_t *context) {
-    uvcurl_log("");
+    uvcurl_log("context[%p]",context);
     assert(NULL != context);
     uv_close((uv_handle_t*) &context->pool_, _curl_close_cb);
 }
@@ -77,7 +80,7 @@ uvcurl_multi_t* uvcurl_multi_init_default_uv_loop()
 }
 
 static void _check_multi_info(uvcurl_multi_t* multi) {
-    uvcurl_log("");
+    uvcurl_log("multi[%p]", multi);
     assert(NULL != multi);
     char *done_url;
     CURLMsg *message;
@@ -89,12 +92,17 @@ static void _check_multi_info(uvcurl_multi_t* multi) {
             curl_easy_getinfo(message->easy_handle, CURLINFO_EFFECTIVE_URL,
                             &done_url);
             printf("curl[%p] url[%s] DONE\n", message->easy_handle, done_url);
-            done_cb_t cb=NULL;
+            uvcurl_curl_private_t* p=NULL;
             
-            CURLcode code= curl_easy_getinfo(message->easy_handle, CURLINFO_PRIVATE, (char**)&cb);
-            uvcurl_log("code[%d] cb[%p]", code, cb);
+            CURLcode code= curl_easy_getinfo(message->easy_handle, CURLINFO_PRIVATE, (char**)&p);
+            assert(0 == code && NULL != p);
+            uvcurl_log("code[%d] p[%p] cb[%p] data[%p]", code, p, p->cb, p->data);
             curl_multi_remove_handle(multi->curlm_, message->easy_handle);
-            cb(message->easy_handle);
+            if(NULL != p)
+            {
+                p->cb(message->easy_handle, p->data);
+                free(p);
+            }    
             curl_easy_cleanup(message->easy_handle);
             break;
 
@@ -120,10 +128,11 @@ static void _start_timeout(CURLM *curlm, long timeout_ms, void *userp) {
     uvcurl_multi_t* multi = (uvcurl_multi_t*)userp;
     if (timeout_ms <= 0)
         timeout_ms = 1; /* 0 means directly call socket_action, but we'll do it in a bit */
+        uvcurl_log("timer[%p] timeout_ms[%ld]", &multi->timer_, timeout_ms);
     uv_timer_start(&multi->timer_, _timer_cb, timeout_ms, 0);
 }
 static void _curl_perform(uv_poll_t *req, int status, int events) {
-    uvcurl_log("");
+    uvcurl_log("req[%p] status[%d] events[%d]", req, status, events);
     curl_context_t *context = (curl_context_t*)req;
     uvcurl_multi_t* multi = context->multi_;
     uv_timer_stop(&multi->timer_);
@@ -151,6 +160,7 @@ static int _handle_socket(CURL *easy, curl_socket_t s, int action, void *userp, 
         else {
             curl_context = _create_curl_context(multi, s);
             curl_multi_assign(multi->curlm_, s, (void *) curl_context);
+            uvcurl_log("context[%p]", curl_context);
         }
     }
 
@@ -216,17 +226,17 @@ void uvcurl_multi_cleanup(uvcurl_multi_t* multi)
     curl_multi_cleanup(multi->curlm_);
 }
 
-CURLMcode uvcurl_multi_add_easy(uvcurl_multi_t* multi, CURL* easy, done_cb_t done_cb) 
+CURLMcode uvcurl_multi_add_easy(uvcurl_multi_t* multi, CURL* easy, uvcurl_curl_done_cb_t done_cb, void* data) 
 {
     
     uvcurl_log("multi[%p] curlm[%p] easy[%p] cb[%p]", multi, multi->curlm_, easy, done_cb);
     assert(NULL != multi);
     assert(NULL != easy);
-    CURLcode code = curl_easy_setopt(easy, CURLOPT_PRIVATE, (void*)done_cb);
+    uvcurl_malloc_obj(uvcurl_curl_private_t, p);
+    p->cb = done_cb;
+    p->data = data;
+    CURLcode code = curl_easy_setopt(easy, CURLOPT_PRIVATE, (void*)p);
     uvcurl_log("set CURLOPT_PRIVATE code[%d]", code);
-    // done_cb_t cb=NULL;
-    // code= curl_easy_getinfo(easy, CURLINFO_PRIVATE, (char**)&cb);
-    //         uvcurl_log("code[%d] cb[%p]", code, cb);
     
 
     return curl_multi_add_handle(multi->curlm_, easy);

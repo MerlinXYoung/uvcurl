@@ -1,12 +1,23 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <uvcurl/uvcurl.h>
-uvcurl_multi_t* multi = NULL;
-void cb(CURL* curl, void* data)
+#include <uvcurl/Multi.hpp>
+#include <memory>
+#if __cplusplus >= 201402L
+#elif __cplusplus >= 201103L
+namespace std
 {
-    fprintf(stderr, "curl[%p] data[%p] done\n", curl, data);
+template<class T, class... Args>
+std::unique_ptr<T> make_unique(Args&&... args)
+{
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
-void add_download(const char *url, int num) {
+}
+#else
+#error("error c++ std less 11")
+#endif
+using namespace std;
+
+void add_download(shared_ptr<cppuvcurl::Multi> multi, const char *url, int num) {
     char filename[50];
     sprintf(filename, "%d.download", num);
     FILE *file;
@@ -20,7 +31,9 @@ void add_download(const char *url, int num) {
     CURL *curl = curl_easy_init();
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
     curl_easy_setopt(curl, CURLOPT_URL, url);
-    uvcurl_multi_add_easy(multi, curl, cb, NULL);
+    multi->async_preform(curl, [num](CURL* curl){
+        printf("curl[%p] num[%d] done!\n", curl, num);
+    });
     fprintf(stderr, "curl[%p] Added download %s -> %s\n", curl, url, filename);
 }
 
@@ -35,13 +48,13 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    auto multi = make_shared<cppuvcurl::Multi>(loop);
     
-    multi = uvcurl_multi_init( loop);
+    
     while (argc-- > 1) {
-        add_download(argv[argc], argc);
+        add_download(multi, argv[argc], argc);
     }
 
     uv_run(loop, UV_RUN_DEFAULT);
-    uvcurl_multi_cleanup(multi);
     return 0;
 }
