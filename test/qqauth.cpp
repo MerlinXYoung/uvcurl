@@ -51,8 +51,7 @@ int QQAuth::do_auth(uint32_t client_id, const char* openid, const char* appkey)
 #if 1
     typedef size_t (*write_callback_t)(char *ptr, size_t size, size_t nmemb, void *userdata);
     CURLcode code = curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION,
-    #if 1
-     (write_callback_t)[](char *ptr, size_t size, size_t nmemb, void *userdata)->size_t{
+     (write_callback_t)([](char *ptr, size_t size, size_t nmemb, void *userdata)->size_t{
         printf("ptr[%p] size[%lu] nmemb[%lu] userdata[%p]|n", ptr, size, nmemb, userdata);
         size_t xSize = size*nmemb;
         std::string * pStr = reinterpret_cast<std::string*>(userdata);
@@ -60,10 +59,7 @@ int QQAuth::do_auth(uint32_t client_id, const char* openid, const char* appkey)
             pStr->append((char*)ptr, xSize);
 
         return xSize;
-    }
-    #else
-        cb
-    #endif
+    })
     );
     printf("code[%d]\n", code);
     code = curl_easy_setopt(handle, CURLOPT_WRITEDATA, reinterpret_cast<void*>(&(context->data_)));
